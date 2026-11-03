@@ -97,8 +97,23 @@ above_clean <- above %>%
 #-----------------------------------------------------------------------------
 ##### Check that no real data was deleted during cleaning ####
 
+lost_values <- tibble(
+  variable = num_cols,
+  before   = map_int(num_cols, ~ sum(!is.na(above[[.x]]))),
+  after    = map_int(num_cols, ~ sum(!is.na(above_clean[[.x]]))),
+  senesced = map_int(num_cols, ~ sum(str_detect(above[[.x]],
+                                                regex("fully\\s*senesc", ignore_case = TRUE)), na.rm = TRUE))
+) %>%
+  mutate(unexplained_loss = before - after - senesced)
+view(lost_values)
+# all should be zero, showing that nothing was lost between the before and after file. 
 
+# Tally of the leaf notes
+above_clean %>%
+  pivot_longer(ends_with("_status"), names_to = "leaf", values_to = "status") %>%
+  count(fxl_group, status)
 
 # ==============================================================================
-# SORT INTO CANOPY HEIGHT AND LEAF LENGTH
+# To edit
 # ==============================================================================
+
