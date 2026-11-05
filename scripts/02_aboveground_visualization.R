@@ -15,31 +15,63 @@ leaflg <- read_csv("data/leaflength_clean.csv") ##import cleaned leaf length fil
 canopy <- read_csv("data/canopyheight_clean.csv", ##import cleaned leaf length file
     col_types = cols(qne_species = col_character())) # read species columns as character, since it is reading it as lgl
 
-#### Graphing leaf length for just Monolith 2, which we know had good graminoid growth ###
-
-M02_LL <-leaflg %>%
-  filter (monolith_id == "02") %>% # filter for just monolith 2.
-     pivot_longer(                  # Pivot the leaf columns (l1, l2, l3) into a long format
-        cols = c(l1, l2, l3), 
-        names_to = "leaf_id", 
-        values_to = "length_cm"
-        ) %>%
-  filter(!is.na(length_cm)) # Drop rows where there were no leaves measured. 
-
-ggplot (M02_LL, aes (x=date, y=length_cm, group=leaf_id))+
-  geom_line(aes(colour = leaf_id)) +
-  geom_point(aes(colour = leaf_id)) +
-  facet_grid(fxl_group ~ .) 
-
-
-canopy <- canopy %>%
-  mutate(maxheight = pmax(qne_h, qes_h, qsw_h, qwn_h, na.rm = TRUE))
-  
-  filter (monolith_id == "02") %>% # filter for just monolith 2.
-  pivot_longer(                  
+####FOCUS ON GRAMINOIDS AND FORBS, SINCE WE KNOW THEY GREW ###
+gram_leaf <- leaflg %>%          
+  filter(fxl_group == "graminoid") %>%
+  pivot_longer(                  # Pivot the leaf columns (l1, l2, l3) into a long format
     cols = c(l1, l2, l3), 
     names_to = "leaf_id", 
     values_to = "length_cm"
   ) %>%
   filter(!is.na(length_cm)) # Drop rows where there were no leaves measured. 
 
+forb_leaf <- leaflg %>%          
+  filter(fxl_group == "forb") %>%
+  pivot_longer(                  # Pivot the leaf columns (l1, l2, l3) into a long format
+    cols = c(l1, l2, l3), 
+    names_to = "leaf_id", 
+    values_to = "length_cm"
+  ) %>%
+  filter(!is.na(length_cm)) # Drop rows where there were no leaves measured. 
+
+gram_canopy <-canopy %>% 
+  mutate(maxheight = pmax(qne_h, qes_h, qsw_h, qwn_h, na.rm = TRUE)) %>%
+  filter(fxl_group == "graminoid")
+
+forb_canopy <-canopy %>% 
+  mutate(maxheight = pmax(qne_h, qes_h, qsw_h, qwn_h, na.rm = TRUE)) %>%
+  filter(fxl_group == "forb")
+
+#### Graphing graminoid leaf lengths  ###
+
+ggplot (gram_leaf, aes (x=date, y=length_cm, group=monolith_id))+
+  geom_line(aes(colour = monolith_id)) +
+  geom_point(aes(colour = monolith_id)) +
+  facet_grid(treatment ~ .) +
+  scale_x_date(
+    date_breaks = "5 days") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+#just monolith 2
+M02_gram_canopy <- gram_canopy%>%
+  filter(monolith_id =="02")
+
+ggplot (M02_gram_canopy, aes (x=date, y=maxheight))+
+  geom_line() +
+  geom_point() +
+  scale_x_date(
+    date_breaks = "5 days") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+#### Graphing forb leaf lengths  ###
+
+ggplot (forb_leaf, aes (x=date, y=length_cm, group=leaf_id))+
+  geom_line(aes(colour = leaf_id)) +
+  geom_point(aes(colour = leaf_id)) +
+  facet_wrap(~ monolith_id, ncol = 4) +
+  scale_x_date(
+    date_breaks = "5 days") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
