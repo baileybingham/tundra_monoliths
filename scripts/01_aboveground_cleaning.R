@@ -15,8 +15,9 @@ above <- read_csv("raw_data/Above-ground-measurements.csv", ##import raw above g
                   col_types = cols(.default = col_character()), #read everything as text so typos like "0,32" or "o.40" are not lost
                   name_repair = tolower)%>%  #change heading names to lowercase
   mutate(
-    monolith_id = str_pad(monolith_id, width = 2, side = "left", pad = "0") #make sure all monolith IDs are two digits
-  )
+    monolith_id = str_pad(monolith_id, width = 2, side = "left", pad = "0"), #make sure all monolith IDs are two digits
+    monolith_id = paste0("M_", monolith_id))
+  
 
 names(above)
 
@@ -46,7 +47,7 @@ bad_numeric <- above %>%
 
 head (bad_numeric) # inspect each one, e.g. "0,32", "o.40", "~5"  
 bad_numeric_count <-count(bad_numeric, raw, sort = TRUE)   # count the number of time that that text occurs where there should be numbers. 
-view(bad_numeric_count)
+head(bad_numeric_count)
 
 #-----------------------------------------------------------------------------
 ##### Fix typos in numeric columns ####
@@ -105,7 +106,7 @@ lost_values <- tibble(
                                                 regex("fully\\s*senesc", ignore_case = TRUE)), na.rm = TRUE))
 ) %>%
   mutate(unexplained_loss = before - after - senesced)
-view(lost_values)
+head(lost_values)
 # all should be zero, showing that nothing was lost between the before and after file. 
 
 # Tally of the leaf notes
@@ -115,19 +116,39 @@ above_clean %>%
 #not sure why there is a forb with a 'bud' status. To deal with later. 
 
 # ==============================================================================
+#Descriptive statistics to look for errors in where the decimal was placed
+# ==============================================================================
+
+summary (above_clean)
+
+# ==============================================================================
+# Add treatment to the data
+# ==============================================================================
+# Monolith treatments #
+treatments<- tibble(
+  monolith_id = c("M_01", "M_02", "M_03", "M_04", "M_05", "M_06", "M_07", "M_08", "M_09", "M_10", 
+         "M_11", "M_12", "M_13", "M_14", "M_15", "M_16", "M_17", "M_18", "M_19", "M_20", "M_21"),
+  treatment = c("ext", "hw", "hw", "con", "con", "ext", "ext", "ext", "con", "ext", 
+                "hw", "hw", "hw", "con", "con", "ext", "con", "ext", "hw", "con", "hw")
+  )
+
+above_clean <-above_clean %>%
+  left_join(treatments, by = "monolith_id")
+
+# ==============================================================================
 # Separate into leaf length data and canopy height data
 # ==============================================================================
 
 #LEAF LENGTHS#
 #remove dates before August 13th, since no leaf length measurements were taken before that date
-leaflg <- select (above_clean, date, monolith_id, fxl_group, starts_with ("l")) %>%
+leaflg <- select (above_clean, date, monolith_id, treatment, fxl_group, starts_with ("l")) %>%
   filter(date >= mdy("August 13, 2026"))
 
-#write_csv (leaflg, "data/leaflength_clean.csv")
+write_csv (leaflg, "data/leaflength_clean.csv")
 
 #CANOPY HEIGHT#
 #remove dates before August 13th. There were baseline measurements taken on Aug 6th, but they were mostly dead biomass. 
-canopy <- select (above_clean, date, monolith_id, fxl_group, starts_with ("q"), notes) %>%
+canopy <- select (above_clean, date, monolith_id, treatment, fxl_group, starts_with ("q"), notes) %>%
   filter(date >= mdy("August 13, 2026"))
 
-#write_csv (canopy, "data/canopyheight_clean.csv")
+write_csv (canopy, "data/canopyheight_clean.csv")
