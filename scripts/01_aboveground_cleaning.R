@@ -40,7 +40,7 @@ bad_numeric <- above %>%
   ) %>%
   filter(
     !is.na(raw),                                   # filter out NAs
-    is.na(suppressWarnings(as.numeric(raw)))       # list all cells that cannot be converted to a number
+    is.na((as.numeric(raw)))       # list all cells that cannot be converted to a number
   ) %>%
   select(row, date, monolith_id, fxl_group, variable, raw)
 
@@ -112,8 +112,22 @@ view(lost_values)
 above_clean %>%
   pivot_longer(ends_with("_status"), names_to = "leaf", values_to = "status") %>%
   count(fxl_group, status)
+#not sure why there is a forb with a 'bud' status. To deal with later. 
 
 # ==============================================================================
-# To edit
+# Separate into leaf length data and canopy height data
 # ==============================================================================
 
+#LEAF LENGTHS#
+#remove dates before August 13th, since no leaf length measurements were taken before that date
+leaflg <- select (above_clean, date, monolith_id, fxl_group, starts_with ("l")) %>%
+  filter(date >= mdy("August 13, 2026"))
+
+#write_csv (leaflg, "data/leaflength_clean.csv")
+
+#CANOPY HEIGHT#
+#remove dates before August 13th. There were baseline measurements taken on Aug 6th, but they were mostly dead biomass. 
+canopy <- select (above_clean, date, monolith_id, fxl_group, starts_with ("q"), notes) %>%
+  filter(date >= mdy("August 13, 2026"))
+
+#write_csv (canopy, "data/canopyheight_clean.csv")
