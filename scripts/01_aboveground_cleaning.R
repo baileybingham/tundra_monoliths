@@ -195,7 +195,25 @@ head (bad_numeric) # inspect each one, e.g. "0,32", "o.40", "~5"  #if nothing, a
 bad_numeric_count <-count(bad_numeric, avg_height_cm, sort = TRUE)   # count the number of time that that text occurs where there should be numbers. 
 head(bad_numeric_count)
 
-## Apply Cleaning function created in the 2026 part
+## recreate clean_num function and apply
+#-----------------------------------------------------------------------------
+##### Fix typos in numeric columns ####
+
+clean_num <- function(x) { #create a function to clean the data
+  x_trim <- str_trim(x)    # remove stray spaces at either end of entries
+  
+  case_when(
+    # any entry starting with "bud" ("bud", "Bud", "buds", "budding") -> 0.001
+    str_detect(x_trim, regex("^bud", ignore_case = TRUE)) ~ 0.001,
+    
+    # everything else: repair typos, keep only plain numbers, convert to numeric.
+    .default = x_trim %>%
+      str_replace(",", ".") %>%                  # decimal comma: "0,32" -> "0.32"
+      str_replace("^[oO](?=[.,]?\\d)", "0") %>%  # leading letter o: "o.40" -> "0.40"
+      str_extract("^-?\\d*\\.?\\d+$") %>%        # NA unless it is a plain number
+      parse_double()                             # readr: text -> number (NA stays NA)
+  )
+}
 
 above25_clean <- above25 %>%
   mutate(
@@ -226,16 +244,28 @@ above25_clean <-above25_clean %>%
 # ==============================================================================
 # Add simulated date and experimental day to data for easier comparison to other years
 # ==============================================================================
-actual_start25    <- as.Date("2025-04-11")
-simulated_start25 <- as.Date("2025-06-01") # this is the date that we were simulating the light and temp conditions for. Year is arbitrary.
+actual_start25 <- as.Date("2025-04-11")  # start of the experiment in 2025
+actual_aut25_control<- as.Date("2025-06-27") #actual date we decreased light for control and hw
+actual_aut25_ext <- as.Date("2025-07-16") #actual date we decreased light for ext.
+sim_aut25_start <- as.Date("2025-08-14") # this is the approx date where light begins to decrease below 24hrs on QHI. Year is arbitrary.
 
 above25_clean2 <- above25_clean %>%
   mutate(
-    exp_day = as.numeric(date - actual_start25) + 1, #calculate the experimental day.
-    sim_date = simulated_start25 + (date - actual_start25) #calculate the simulated date
+    # experimental day: days since the start of the experiment (day 1 = start)
+    exp_day = as.numeric(date - actual_start25) + 1,
+    
+    # each treatment's own light-decrease date
+    actual_aut_start = case_when(
+      treatment == "ext" ~ actual_aut25_ext,
+      TRUE               ~ actual_aut25_control   # control and heat wave
+    ),
+    
+    # simulated date: 14 Aug + days since that treatment's light decrease began
+    sim_date = sim_aut25_start + as.numeric(date - actual_aut_start)
   )
 
 head(above25_clean2)
+
 
 #reorder columns and print
 final25 <- select (above25_clean2, date, sim_date, exp_day, monolith_id, treatment, avg_height_cm)
