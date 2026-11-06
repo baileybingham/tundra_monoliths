@@ -102,6 +102,10 @@ per_monolith <- bothyrs %>%
   summarise(length_cm = mean(length_cm, na.rm = TRUE), .groups = "drop") %>%
   filter(!is.nan(length_cm))
 
+# Per monolith, but without the ones that didn't grow
+filtered_mon <- per_monolith %>%
+  filter(!monolith_id %in% c("M_05", "M_11", "M_18", "M_09", "M_16", "M_07"))
+
 summ <- per_monolith %>%
   group_by(year, treatment, sim_date) %>%
   summarise(
@@ -142,9 +146,9 @@ ref_dates <- tibble::tribble(
   "2025", "con",      as.Date("2000-07-29"),
   "2025", "hw",       as.Date("2000-07-29"),
   "2025", "ext",      as.Date("2000-07-31"),
-  "2026", "con",      as.Date("2000-07-28"),
-  "2026", "hw",       as.Date("2000-07-28"),
-  "2026", "ext",      as.Date("2000-07-28")
+  "2026", "con",      as.Date("2000-07-31"),
+  "2026", "hw",       as.Date("2000-07-31"),
+  "2026", "ext",      as.Date("2000-07-31")
 ) %>%
   mutate(treatment = factor(treatment, levels = levels(summ$treatment)))
 
@@ -177,3 +181,51 @@ ggplot(relative_avg, aes(sim_date, mean_change, colour = treatment, linetype = y
   labs(x = "Simulated date", y = "Graminoid Leaf Length (cm) relative to sim July end",
        colour = "Treatment", linetype = "Year", shape = "Year")+
   theme_minimal()
+
+# =================================================================================
+#                       FILTER OUT PLANTS THAT DID NOT GROW MUCH 
+# =================================================================================
+
+# Per monolith, but without the ones that didn't grow
+# note this is currently removing them from both 2025 and 2026. They really should only be removed from 2026. 
+filtered_mon <- per_monolith %>%
+  filter(!monolith_id %in% c("M_05", "M_11", "M_18", "M_09", "M_16", "M_07"))
+
+filtered_summ <- filtered_mon %>%
+  group_by(year, treatment, sim_date) %>%
+  summarise(
+    mean = mean(length_cm),
+    se   = sd(length_cm) / sqrt(n()),
+    .groups = "drop"
+  )
+
+filtered_relative_avg <- filtered_summ %>%
+  left_join(ref_dates, by = c("year", "treatment")) %>%
+  group_by(year, treatment) %>%
+  mutate(
+    ref_mean    = mean[sim_date == first(ref_date)],
+    mean_rel    = mean / ref_mean,        # proportion of baseline (1 = no change)
+    se_rel      = se / ref_mean,
+    mean_change = mean - ref_mean         # change in cm (0 = no change)
+  ) %>%
+  ungroup()
+
+ggplot(filtered_relative_avg, aes(sim_date, mean_change, colour = treatment, linetype = year, shape = year)) +
+  geom_vline(xintercept = as.Date("2000-08-14"),
+             linetype = "dashed", colour = "gold",
+             linewidth = 0.8) +
+  geom_hline(yintercept = 0,
+             linetype = "dashed", colour = "black",
+             linewidth = 0.8) +
+  geom_line() +
+  geom_point(size = 2) +
+  # geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 1) +
+  scale_colour_manual(values = treatment_cols,
+                      labels = c(con = "Control", hw = "Heat wave", ext = "Extended")
+  ) +
+  scale_x_date(date_labels = "%b %d", breaks= "1 weeks", limits =c(as.Date("2000-07-23"), NA)) +
+  coord_cartesian(ylim = c(-5, 15), expand = FALSE)+
+  labs(x = "Simulated date", y = "Graminoid Leaf Length (cm) relative to sim July end",
+       colour = "Treatment", linetype = "Year", shape = "Year")+
+  theme_minimal()
+
