@@ -2,14 +2,15 @@
 #### By Bailey Bingham 
 #### Nov 2, 2026
 
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # ==============================================================================
-# SET UP
+#                            2026 DATA CLEANING
 # ==============================================================================
 
 source(file.path("scripts","00_packages.R")) # load the packages listed in the 00_packages.R file under scripts
 
-#Import raw data
-above <- read_csv("raw_data/Above-ground-measurements.csv", ##import raw above ground measurement file,
+#Import 2026 raw data
+above26 <- read_csv("raw_data/2026/Above-ground-measurements.csv", ##import raw above ground measurement file,
                   skip = 3, #skip the first 3 rows since they include metadata
                   na = c("", "NA", "N/A", "na", "n/a", "NaN", "-", "#N/A", " "), #write all of these variations as na
                   col_types = cols(.default = col_character()), #read everything as text so typos like "0,32" or "o.40" are not lost
@@ -17,9 +18,7 @@ above <- read_csv("raw_data/Above-ground-measurements.csv", ##import raw above g
   mutate(
     monolith_id = str_pad(monolith_id, width = 2, side = "left", pad = "0"), #make sure all monolith IDs are two digits
     monolith_id = paste0("M_", monolith_id))
-  
-
-names(above)
+names(above26)
 
 # ==============================================================================
 # DATA TIDYING
@@ -32,7 +31,7 @@ num_cols    <- c(height_cols, leaf_cols, count_cols, "senes") # "senes" is the %
 
 ##### Find typos in numeric columns #####
 
-bad_numeric <- above %>%
+bad_numeric <- above26 %>%
   mutate(row = row_number()) %>%   
    pivot_longer(
     cols      = all_of(num_cols),      # stack all the numeric columns together, so everything that should be a number is in one place. 
@@ -59,9 +58,8 @@ clean_num <- function(x) { #create a function to clean the data
     # any entry starting with "bud" ("bud", "Bud", "buds", "budding") -> 0.001
     str_detect(x_trim, regex("^bud", ignore_case = TRUE)) ~ 0.001,
     
-    # everything else: repair typos, keep only plain numbers, convert.
-    # "fully senesced" is not a plain number, so it becomes NA here.
-    .default = x_trim %>%
+    # everything else: repair typos, keep only plain numbers, convert to numeric.
+       .default = x_trim %>%
       str_replace(",", ".") %>%                  # decimal comma: "0,32" -> "0.32"
       str_replace("^[oO](?=[.,]?\\d)", "0") %>%  # leading letter o: "o.40" -> "0.40"
       str_extract("^-?\\d*\\.?\\d+$") %>%        # NA unless it is a plain number
@@ -81,7 +79,7 @@ status_note <- function(x) {
   )
 }
 
-above_clean <- above %>%
+above26_clean <- above26 %>%
   #make notes of all statuses that are in the leaf numeric columns. 
   mutate(across(all_of(leaf_cols), status_note, .names = "{.col}_status")) %>%
   # Convert any typoes to numbers and tidy the id columns.
@@ -100,9 +98,9 @@ above_clean <- above %>%
 
 lost_values <- tibble(
   variable = num_cols,
-  before   = map_int(num_cols, ~ sum(!is.na(above[[.x]]))),
-  after    = map_int(num_cols, ~ sum(!is.na(above_clean[[.x]]))),
-  senesced = map_int(num_cols, ~ sum(str_detect(above[[.x]],
+  before   = map_int(num_cols, ~ sum(!is.na(above26[[.x]]))),
+  after    = map_int(num_cols, ~ sum(!is.na(above26_clean[[.x]]))),
+  senesced = map_int(num_cols, ~ sum(str_detect(above26[[.x]],
                                                 regex("fully\\s*senesc", ignore_case = TRUE)), na.rm = TRUE))
 ) %>%
   mutate(unexplained_loss = before - after - senesced)
@@ -110,7 +108,7 @@ head(lost_values)
 # all should be zero, showing that nothing was lost between the before and after file. 
 
 # Tally of the leaf notes
-above_clean %>%
+above26_clean %>%
   pivot_longer(ends_with("_status"), names_to = "leaf", values_to = "status") %>%
   count(fxl_group, status)
 #not sure why there is a forb with a 'bud' status. To deal with later. 
@@ -119,7 +117,7 @@ above_clean %>%
 #Descriptive statistics to look for errors in where the decimal was placed
 # ==============================================================================
 
-summary (above_clean)
+summary (above26_clean)
 
 # ==============================================================================
 # Add treatment to the data
@@ -132,23 +130,114 @@ treatments<- tibble(
                 "hw", "hw", "hw", "con", "con", "ext", "con", "ext", "hw", "con", "hw")
   )
 
-above_clean <-above_clean %>%
+above26_clean <-above26_clean %>%
   left_join(treatments, by = "monolith_id")
 
+# ==============================================================================
+# Add simulated date and experimental day to data for easier comparison to other years
+# ==============================================================================
+actual_start    <- as.Date("2026-07-17")
+simulated_start <- as.Date("2026-05-23") # this is the date that we were simulating the light and temp conditions for. Year is arbitrary.
+
+above26_clean2 <- above26_clean %>%
+  mutate(
+    exp_day = as.numeric(date - actual_start) + 1, #calculate the experimental day.
+    sim_date = simulated_start + (date - actual_start) #calculate the simulated date
+  )
+
+head(above26_clean2)
 # ==============================================================================
 # Separate into leaf length data and canopy height data
 # ==============================================================================
 
 #LEAF LENGTHS#
 #remove dates before August 13th, since no leaf length measurements were taken before that date
-leaflg <- select (above_clean, date, monolith_id, treatment, fxl_group, starts_with ("l")) %>%
+leaflg26 <- select (above26_clean2, date, sim_date, exp_day, monolith_id, treatment, fxl_group, starts_with ("l")) %>%
   filter(date >= mdy("August 13, 2026"))
 
-write_csv (leaflg, "data/leaflength_clean.csv")
+write_csv (leaflg26, "data/2026_leaflength_clean.csv")
 
 #CANOPY HEIGHT#
 #remove dates before August 13th. There were baseline measurements taken on Aug 6th, but they were mostly dead biomass. 
-canopy <- select (above_clean, date, monolith_id, treatment, fxl_group, starts_with ("q"), notes) %>%
+canopy26 <- select (above26_clean2, date, sim_date, exp_day, monolith_id, treatment, fxl_group, starts_with ("q"), notes) %>%
   filter(date >= mdy("August 13, 2026"))
 
-write_csv (canopy, "data/canopyheight_clean.csv")
+write_csv (canopy26, "data/2026_canopyheight_clean.csv")
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# ==============================================================================
+#                          2025 DATA CLEANING
+# ==============================================================================
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+#Import 2025 raw data
+#note that this year we only collected the length of the longest thing, which was always a graminoid. 
+#this data reflects the longest graminoid leaves, measured weekly. 
+above25 <- read_csv("raw_data/2025/2025_graminoid_longleaf.csv", ##import raw long leaf measurement file,
+                    na = c("", "NA", "N/A", "na", "n/a", "NaN", "-", "#N/A", " "), #write all of these variations as na
+                    col_types = cols(.default = col_character()), #read everything as text so typos like "0,32" or "o.40" are not lost
+                    name_repair = tolower)%>%  #change heading names to lowercase
+  mutate(
+    monolith_id = str_pad(monolith_id, width = 2, side = "left", pad = "0"), #make sure all monolith IDs are two digits
+    monolith_id = paste0("M_", monolith_id))
+names(above25)
+
+##### Find typos in numeric columns #####
+bad_numeric <- above25 %>%
+  filter(
+    !is.na(avg_height_cm),                                   # filter out NAs
+    is.na((as.numeric(avg_height_cm)))       # list all cells that cannot be converted to a number
+  ) %>%
+  select(date, monolith_id, avg_height_cm)
+
+head (bad_numeric) # inspect each one, e.g. "0,32", "o.40", "~5"  #if nothing, all lines are numeric. 
+bad_numeric_count <-count(bad_numeric, avg_height_cm, sort = TRUE)   # count the number of time that that text occurs where there should be numbers. 
+head(bad_numeric_count)
+
+## Apply Cleaning function created in the 2026 part
+
+above25_clean <- above25 %>%
+  mutate(
+    date      = dmy(date),                              # read date as date (YYYYMMDD)
+    avg_height_cm = clean_num (avg_height_cm))         # apply clean_num() function to leaf lengths
+  
+
+# ==============================================================================
+#Descriptive statistics to look for errors in where the decimal was placed
+# ==============================================================================
+
+summary (above25_clean)
+
+# ==============================================================================
+# Add treatment to the data
+# ==============================================================================
+# Monolith treatments #
+treatments<- tibble(
+  monolith_id = c("M_01", "M_02", "M_03", "M_04", "M_05", "M_06", "M_07", "M_08", "M_09", "M_10", 
+                  "M_11", "M_12", "M_13", "M_14", "M_15", "M_16", "M_17", "M_18", "M_19", "M_20", "M_21"),
+  treatment = c("ext", "hw", "hw", "con", "con", "ext", "ext", "ext", "con", "ext", 
+                "hw", "hw", "hw", "con", "con", "ext", "con", "ext", "hw", "con", "hw")
+)
+
+above25_clean <-above25_clean %>%
+  left_join(treatments, by = "monolith_id")
+
+# ==============================================================================
+# Add simulated date and experimental day to data for easier comparison to other years
+# ==============================================================================
+actual_start25    <- as.Date("2025-04-11")
+simulated_start25 <- as.Date("2025-06-01") # this is the date that we were simulating the light and temp conditions for. Year is arbitrary.
+
+above25_clean2 <- above25_clean %>%
+  mutate(
+    exp_day = as.numeric(date - actual_start25) + 1, #calculate the experimental day.
+    sim_date = simulated_start25 + (date - actual_start25) #calculate the simulated date
+  )
+
+head(above25_clean2)
+
+#reorder columns and print
+final25 <- select (above25_clean2, date, sim_date, exp_day, monolith_id, treatment, avg_height_cm)
+
+write_csv(final25,"data/2025_gramleaflength_clean.csv") 

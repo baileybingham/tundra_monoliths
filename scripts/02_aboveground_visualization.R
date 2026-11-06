@@ -11,8 +11,8 @@
 source(file.path("scripts","00_packages.R")) # load the packages listed in the 00_packages.R file under scripts
 
 #Import cleaned above ground data from 2026
-leaflg <- read_csv("data/leaflength_clean.csv") ##import cleaned leaf length file
-canopy <- read_csv("data/canopyheight_clean.csv", ##import cleaned leaf length file
+leaflg <- read_csv("data/2026_leaflength_clean.csv") ##import cleaned leaf length file
+canopy <- read_csv("data/2026_canopyheight_clean.csv", ##import cleaned leaf length file
     col_types = cols(qne_species = col_character())) # read species columns as character, since it is reading it as lgl
 
 ####FOCUS ON GRAMINOIDS AND FORBS, SINCE WE KNOW THEY GREW ###
@@ -55,7 +55,7 @@ ggplot (gram_leaf, aes (x=date, y=length_cm, group=monolith_id))+
 
 #just monolith 2
 M02_gram_canopy <- gram_canopy%>%
-  filter(monolith_id =="02")
+  filter(monolith_id =="M_02")
 
 ggplot (M02_gram_canopy, aes (x=date, y=maxheight))+
   geom_line() +
@@ -67,10 +67,10 @@ ggplot (M02_gram_canopy, aes (x=date, y=maxheight))+
 
 #### Graphing forb leaf lengths  ###
 
-ggplot (forb_leaf, aes (x=date, y=length_cm, group=leaf_id))+
-  geom_line(aes(colour = leaf_id)) +
-  geom_point(aes(colour = leaf_id)) +
-  facet_wrap(~ monolith_id, ncol = 4) +
+ggplot (leaflg, aes (x=date, y=l1, group=monolith_id))+
+  geom_line() +
+  geom_point() +
+  facet_grid(treatment ~ fxl_group) +
   scale_x_date(
     date_breaks = "5 days") +
   theme_minimal() +
